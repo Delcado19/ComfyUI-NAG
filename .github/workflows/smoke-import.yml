@@ -35,6 +35,10 @@ jobs:
         run: |
           python - <<'PY'
           import sys, importlib.util, pathlib
+          # ComfyUI parses argv at import time. Force CPU mode so the runner,
+          # which has no CUDA, does not crash inside model_management.py when it
+          # calls torch.cuda.current_device().
+          sys.argv = ['comfyui', '--cpu']
           comfyui_root = pathlib.Path('ComfyUI').resolve()
           nag_root = pathlib.Path('ComfyUI-NAG').resolve()
           sys.path.insert(0, str(comfyui_root))
