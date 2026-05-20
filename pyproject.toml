@@ -1,5 +1,5 @@
 [project]
-name = "comfyui-nag-delcado19"
+name = "comfyui-nag-delcado"
 description = "Maintenance fork of ChenDarYen/ComfyUI-NAG (Normalized Attention Guidance) with compatibility patches for ComfyUI v0.21+."
 version = "1.0.1"
 license = { file = "LICENSE" }
@@ -13,6 +13,6 @@ Upstream = "https://github.com/ChenDarYen/ComfyUI-NAG"
 Paper = "https://arxiv.org/abs/2505.21179"
 
 [tool.comfy]
-PublisherId = "delcado19"
-DisplayName = "ComfyUI-NAG (Delcado19 fork)"
+PublisherId = "delcado"
+DisplayName = "ComfyUI-NAG (Delcado fork)"
 Icon = ""
