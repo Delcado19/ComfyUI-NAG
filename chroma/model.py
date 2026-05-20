@@ -7,10 +7,6 @@ from einops import rearrange, repeat
 import comfy.ldm.common_dit
 
 from comfy.ldm.flux.layers import timestep_embedding
-from comfy.ldm.chroma.layers import (
-    DoubleStreamBlock,
-    SingleStreamBlock,
-)
 from comfy.ldm.chroma.model import Chroma
 
 from .layers import NAGDoubleStreamBlock, NAGSingleStreamBlock

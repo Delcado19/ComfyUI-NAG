@@ -4,6 +4,15 @@ from torch import Tensor
 from comfy.ldm.flux.math import attention
 from comfy.ldm.chroma.layers import DoubleStreamBlock, SingleStreamBlock
 
+# ComfyUI v0.21+ exposes None stubs at comfy.ldm.chroma.layers for the relocated
+# DoubleStreamBlock / SingleStreamBlock classes (see the deprecation comment in
+# comfy/ldm/chroma/layers.py). Fall back to the canonical location in flux.
+if DoubleStreamBlock is None or SingleStreamBlock is None:
+    from comfy.ldm.flux.layers import (
+        DoubleStreamBlock,
+        SingleStreamBlock,
+    )
+
 from ..utils import nag
 
 
