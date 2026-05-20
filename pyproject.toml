@@ -1,0 +1,18 @@
+[project]
+name = "comfyui-nag-delcado19"
+description = "Maintenance fork of ChenDarYen/ComfyUI-NAG (Normalized Attention Guidance) with compatibility patches for ComfyUI v0.21+."
+version = "1.0.1"
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.10"
+
+[project.urls]
+Repository = "https://github.com/Delcado19/ComfyUI-NAG"
+Homepage = "https://github.com/Delcado19/ComfyUI-NAG"
+Upstream = "https://github.com/ChenDarYen/ComfyUI-NAG"
+Paper = "https://arxiv.org/abs/2505.21179"
+
+[tool.comfy]
+PublisherId = "delcado19"
+DisplayName = "ComfyUI-NAG (Delcado19 fork)"
+Icon = ""
