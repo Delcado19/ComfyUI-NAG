@@ -63,9 +63,9 @@ Flux-Dev Demo: https://huggingface.co/spaces/ChenDY/NAG_FLUX.1-dev
 
 To use NAG, simply replace
 - `KSampler` with `KSamplerWithNAG`.
-- `KSamplerWithNAG (Advanced)` with `KSampler (Advanced)`.
-- `SamplerCustomWithNAG` with `SamplerCustom`.
-- `NAGGuider` with `BasicGuider`.
+- `KSampler (Advanced)` with `KSamplerWithNAG (Advanced)`.
+- `SamplerCustom` with `SamplerCustomWithNAG`.
+- `BasicGuider` with `NAGGuider`.
 - `CFGGuider` with `NAGCFGGuider`.
 
 We currently support `Flux`, `Flux Kontext`, `Wan`, `Vace Wan`, `Hunyuan Video`, `Choroma`, `SD3.5`, `SDXL` and `SD`.
