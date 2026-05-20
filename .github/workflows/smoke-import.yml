@@ -1,0 +1,56 @@
+name: Smoke import test
+
+on:
+  push:
+    branches: [main, 'fix/**', 'feat/**']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  import:
+    name: Import ComfyUI-NAG against ComfyUI main
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out fork
+        uses: actions/checkout@v4
+        with:
+          path: ComfyUI-NAG
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install minimal ComfyUI runtime deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install einops safetensors transformers tqdm pyyaml pillow numpy
+
+      - name: Clone ComfyUI (latest main)
+        run: git clone --depth 1 https://github.com/comfyanonymous/ComfyUI.git ComfyUI
+
+      - name: Smoke-import NODE_CLASS_MAPPINGS
+        run: |
+          python - <<'PY'
+          import sys, importlib.util, pathlib
+          comfyui_root = pathlib.Path('ComfyUI').resolve()
+          nag_root = pathlib.Path('ComfyUI-NAG').resolve()
+          sys.path.insert(0, str(comfyui_root))
+          spec = importlib.util.spec_from_file_location(
+              'ComfyUI_NAG',
+              str(nag_root / '__init__.py'),
+              submodule_search_locations=[str(nag_root)],
+          )
+          mod = importlib.util.module_from_spec(spec)
+          sys.modules['ComfyUI_NAG'] = mod
+          spec.loader.exec_module(mod)
+          keys = list(mod.NODE_CLASS_MAPPINGS.keys())
+          print('NODE_CLASS_MAPPINGS keys:', keys)
+          required = {'KSamplerWithNAG', 'NAGCFGGuider'}
+          missing = required - set(keys)
+          if missing:
+              raise SystemExit(f'Missing expected nodes: {missing}')
+          print('OK')
+          PY
