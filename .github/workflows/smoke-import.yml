@@ -35,13 +35,20 @@ jobs:
         run: |
           python - <<'PY'
           import sys, importlib.util, pathlib
-          # ComfyUI parses argv at import time. Force CPU mode so the runner,
-          # which has no CUDA, does not crash inside model_management.py when it
-          # calls torch.cuda.current_device().
-          sys.argv = ['comfyui', '--cpu']
+
           comfyui_root = pathlib.Path('ComfyUI').resolve()
           nag_root = pathlib.Path('ComfyUI-NAG').resolve()
           sys.path.insert(0, str(comfyui_root))
+
+          # ComfyUI's model_management runs `total_vram = get_total_memory(get_torch_device())`
+          # at module top level. On a CPU-only runner that call eventually reaches
+          # torch.cuda.current_device() and crashes with
+          # "AssertionError: Torch not compiled with CUDA enabled".
+          # The CPU bypass is gated by `args.cpu == True` (comfy.cli_args).
+          # Force it directly before anything triggers model_management import.
+          import comfy.cli_args
+          comfy.cli_args.args.cpu = True
+
           spec = importlib.util.spec_from_file_location(
               'ComfyUI_NAG',
               str(nag_root / '__init__.py'),
