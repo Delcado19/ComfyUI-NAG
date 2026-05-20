@@ -19,12 +19,17 @@ and parameter semantics untouched.
 
 ## Modifications relative to upstream HEAD (`ef8a641`)
 
-| Date (ISO) | Change | Files | Author |
-|------------|--------|-------|--------|
-| 2026-05-20 | Handle `None` stubs at `comfy.ldm.chroma.layers.DoubleStreamBlock` / `SingleStreamBlock` in ComfyUI v0.21+ via fallback to `comfy.ldm.flux.layers`. Remove dead import of the same symbols in `chroma/model.py`. | `chroma/layers.py`, `chroma/model.py` | Delcado19 |
-| 2026-05-20 | Add `pyproject.toml` for ComfyUI Registry publishing under fork-specific identifier. | `pyproject.toml` | Delcado19 |
-| 2026-05-20 | Add GitHub Actions: smoke import test and ComfyUI Registry publish workflow. | `.github/workflows/*` | Delcado19 |
-| 2026-05-20 | Fork-identity files (this `NOTICE.md`, README banner). | `NOTICE.md`, `README.md` | Delcado19 |
+| Date (ISO) | Commit | Change | Files | Author |
+|------------|--------|--------|-------|--------|
+| 2026-05-20 | `0920a10` | Handle `None` stubs at `comfy.ldm.chroma.layers.DoubleStreamBlock` / `SingleStreamBlock` in ComfyUI v0.21+ via fallback to `comfy.ldm.flux.layers`. Remove dead import of the same symbols in `chroma/model.py`. | `chroma/layers.py`, `chroma/model.py` | Delcado19 |
+| 2026-05-20 | `036e11d` | Fork-identity files (this `NOTICE.md`, README banner). | `NOTICE.md`, `README.md` | Delcado19 |
+| 2026-05-20 | `8fe3449` | Add `pyproject.toml` for ComfyUI Registry publishing under fork-specific identifier. | `pyproject.toml` | Delcado19 |
+| 2026-05-20 | `54e2c2b` | Add GitHub Actions: smoke import test and ComfyUI Registry publish workflow. | `.github/workflows/smoke-import.yml`, `.github/workflows/publish.yml` | Delcado19 |
+| 2026-05-20 | `3618385` | Correct `PublisherId` to `delcado` and rename slug to `comfyui-nag-delcado` to match the registry profile handle `@delcado`. | `pyproject.toml` | Delcado19 |
+| 2026-05-20 | `efcc966` | Fix README Usage-section replacement direction (closes upstream [#39](https://github.com/ChenDarYen/ComfyUI-NAG/issues/39)). | `README.md` | Delcado19 |
+| 2026-05-20 | `f048600` | CI hotfix: install ComfyUI's own `requirements.txt` instead of a hand-curated pip list (was missing `scipy`). | `.github/workflows/smoke-import.yml` | Delcado19 |
+| 2026-05-20 | `f0e5e69` → `2fd1269` | CI hotfix: force CPU mode in the smoke-import job so ComfyUI's `model_management.py` does not call `torch.cuda.current_device()` on a CPU-only runner. First via `sys.argv = ['comfyui', '--cpu']` (insufficient), then via direct `comfy.cli_args.args.cpu = True` patch. | `.github/workflows/smoke-import.yml` | Delcado19 |
+| 2026-05-20 | — | First publish to Comfy Registry as [`comfyui-nag-delcado`](https://registry.comfy.org/nodes/comfyui-nag-delcado) version `1.0.1`. | — | Delcado19 |
 
 ## Upstream tracking
 

@@ -1,4 +1,4 @@
-# ComfyUI-NAG (Delcado19 fork)
+# ComfyUI-NAG (Delcado fork)
 
 > **Maintenance fork** of [ChenDarYen/ComfyUI-NAG](https://github.com/ChenDarYen/ComfyUI-NAG)
 > by Dar-Yen Chen. All credit for the original implementation goes to the upstream
@@ -7,13 +7,33 @@
 > See [`NOTICE.md`](NOTICE.md) for the change list and [`LICENSE`](LICENSE) for
 > the unmodified MIT license terms.
 
-## Fork notes
+## Install
 
-- **`fix/comfy-v0.21-chroma-stub`** (this branch): handles the `None` stubs that
-  ComfyUI v0.21+ exposes at `comfy.ldm.chroma.layers.DoubleStreamBlock` /
-  `SingleStreamBlock`. Without this patch, importing the custom node fails with
-  `TypeError: NoneType takes no arguments` at `chroma/layers.py:10`
-  (related upstream issue: [#79](https://github.com/ChenDarYen/ComfyUI-NAG/issues/79)).
+- **Comfy Registry:** [`comfyui-nag-delcado`](https://registry.comfy.org/nodes/comfyui-nag-delcado)
+  (publisher [`@delcado`](https://registry.comfy.org/publishers/delcado))
+- **From source:** `git clone https://github.com/Delcado19/ComfyUI-NAG.git` into
+  your `ComfyUI/custom_nodes/` directory.
+
+## What this fork fixes vs. upstream
+
+- **`chroma/layers.py` None-stub crash on ComfyUI v0.21+**
+  Upstream `chroma/layers.py:10` does
+  `class NAGDoubleStreamBlock(DoubleStreamBlock):` after importing
+  `DoubleStreamBlock` / `SingleStreamBlock` from `comfy.ldm.chroma.layers`.
+  Recent ComfyUI versions deprecate those symbols and set them to `None`
+  (the real classes moved to `comfy.ldm.flux.layers`), so the import fails
+  with `TypeError: NoneType takes no arguments`. This fork detects the
+  `None` stub and falls back to the new location.
+  Closes the same root cause as upstream issues
+  [#79](https://github.com/ChenDarYen/ComfyUI-NAG/issues/79),
+  [#60](https://github.com/ChenDarYen/ComfyUI-NAG/issues/60),
+  [#54](https://github.com/ChenDarYen/ComfyUI-NAG/issues/54),
+  [#53](https://github.com/ChenDarYen/ComfyUI-NAG/issues/53),
+  [#55](https://github.com/ChenDarYen/ComfyUI-NAG/issues/55).
+- **README Usage section direction** — closes upstream
+  [#39](https://github.com/ChenDarYen/ComfyUI-NAG/issues/39).
+- **Packaging / Registry** — `pyproject.toml` plus GitHub Actions for
+  smoke-import test and Comfy-Registry publish.
 
 ---
 
