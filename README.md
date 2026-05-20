@@ -1,4 +1,21 @@
-# ComfyUI-NAG
+# ComfyUI-NAG (Delcado19 fork)
+
+> **Maintenance fork** of [ChenDarYen/ComfyUI-NAG](https://github.com/ChenDarYen/ComfyUI-NAG)
+> by Dar-Yen Chen. All credit for the original implementation goes to the upstream
+> author; this fork only adds compatibility patches and packaging.
+>
+> See [`NOTICE.md`](NOTICE.md) for the change list and [`LICENSE`](LICENSE) for
+> the unmodified MIT license terms.
+
+## Fork notes
+
+- **`fix/comfy-v0.21-chroma-stub`** (this branch): handles the `None` stubs that
+  ComfyUI v0.21+ exposes at `comfy.ldm.chroma.layers.DoubleStreamBlock` /
+  `SingleStreamBlock`. Without this patch, importing the custom node fails with
+  `TypeError: NoneType takes no arguments` at `chroma/layers.py:10`
+  (related upstream issue: [#79](https://github.com/ChenDarYen/ComfyUI-NAG/issues/79)).
+
+---
 
 Implementation of [Normalized Attention Guidance: Universal Negative Guidance for Diffusion Models](https://chendaryen.github.io/NAG.github.io/) for [ComfyUI](https://github.com/comfyanonymous/ComfyUI).
 
