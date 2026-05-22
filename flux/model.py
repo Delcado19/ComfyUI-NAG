@@ -19,23 +19,24 @@ from .layers import NAGDoubleStreamBlock, NAGSingleStreamBlock
 from ..utils import cat_context, check_nag_activation, poly1d, get_closure_vars, is_from_wavespeed, NAGSwitch
 
 
-class NAGFlux(Flux):
-    def make_txt_ids(self, batch_size, context_len, device):
-        txt_ids = torch.zeros(
-            (batch_size, context_len, len(self.params.axes_dim)),
+def make_txt_ids(model, batch_size, context_len, device):
+    txt_ids = torch.zeros(
+        (batch_size, context_len, len(model.params.axes_dim)),
+        device=device,
+        dtype=torch.float32,
+    )
+    for i in getattr(model.params, "txt_ids_dims", []):
+        txt_ids[:, :, i] = torch.linspace(
+            0,
+            context_len - 1,
+            steps=context_len,
             device=device,
             dtype=torch.float32,
         )
-        for i in getattr(self.params, "txt_ids_dims", []):
-            txt_ids[:, :, i] = torch.linspace(
-                0,
-                context_len - 1,
-                steps=context_len,
-                device=device,
-                dtype=torch.float32,
-            )
-        return txt_ids
+    return txt_ids
 
+
+class NAGFlux(Flux):
     def forward_orig(
         self,
         img: Tensor,
@@ -587,8 +588,8 @@ class NAGFlux(Flux):
                     block,
                 )
 
-            txt_ids = self.make_txt_ids(bs, origin_context_len, x.device)
-            txt_ids_negative = self.make_txt_ids(nag_bsz, nag_negative_context_len, x.device)
+            txt_ids = make_txt_ids(self, bs, origin_context_len, x.device)
+            txt_ids_negative = make_txt_ids(self, nag_bsz, nag_negative_context_len, x.device)
             out = self.forward_orig(
                 img, img_ids, context, txt_ids, txt_ids_negative, timestep, y, guidance, control, transformer_options,
                      attn_mask=kwargs.get("attention_mask", None),
@@ -601,7 +602,7 @@ class NAGFlux(Flux):
                 block.forward = single_blocks_forward.pop(0)
 
         else:
-            txt_ids = self.make_txt_ids(bs, context.shape[1], x.device)
+            txt_ids = make_txt_ids(self, bs, context.shape[1], x.device)
             out = self.forward_orig(
                 img, img_ids, context, txt_ids, timestep, y, guidance, control, transformer_options,
                 attn_mask=kwargs.get("attention_mask", None),
