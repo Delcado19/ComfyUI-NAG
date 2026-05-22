@@ -20,6 +20,8 @@ from ..utils import cat_context, check_nag_activation, poly1d, get_closure_vars,
 
 
 def make_txt_ids(model, batch_size, context_len, device):
+    # NAG forward is bound onto ComfyUI's original Flux instance, so this helper
+    # must not depend on methods defined only on NAGFlux.
     txt_ids = torch.zeros(
         (batch_size, context_len, len(model.params.axes_dim)),
         device=device,
