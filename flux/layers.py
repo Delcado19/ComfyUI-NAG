@@ -159,8 +159,19 @@ class NAGSingleStreamBlock(SingleStreamBlock):
             transformer_options=None,
             **kwargs,
     ) -> Tensor:
-        mod= self.modulation(vec)[0]
-        qkv, mlp = torch.split(self.linear1(apply_mod(self.pre_norm(x), (1 + mod.scale), mod.shift, modulation_dims)), [3 * self.hidden_size, self.mlp_hidden_dim], dim=-1)
+        if self.modulation:
+            mod = self.modulation(vec)[0]
+        else:
+            mod = vec
+
+        # Mirror ComfyUI's current Flux SingleStreamBlock split. Newer Flux2
+        # variants can make the first MLP projection wider than mlp_hidden_dim
+        # for gated activations; using the old width leaves malformed slices.
+        qkv, mlp = torch.split(
+            self.linear1(apply_mod(self.pre_norm(x), (1 + mod.scale), mod.shift, modulation_dims)),
+            [3 * self.hidden_size, self.mlp_hidden_dim_first],
+            dim=-1,
+        )
 
         q, k, v = qkv.view(qkv.shape[0], qkv.shape[1], 3, self.num_heads, -1).permute(2, 0, 3, 1, 4)
         q, k = self.norm(q, k, v)
@@ -216,8 +227,15 @@ class NAGSingleStreamBlock(SingleStreamBlock):
 
         # compute activation in mlp stream, cat again and run second linear layer
         mlp_negative, mlp = remove_pad_and_get_neg(mlp, pad_dim=1)
-        output_negative = self.linear2(torch.cat((attn_negative, self.mlp_act(mlp_negative)), 2))
-        output = self.linear2(torch.cat((attn, self.mlp_act(mlp)), 2))
+        if self.yak_mlp:
+            mlp_negative = self.mlp_act(mlp_negative[..., self.mlp_hidden_dim_first // 2:]) * mlp_negative[..., :self.mlp_hidden_dim_first // 2]
+            mlp = self.mlp_act(mlp[..., self.mlp_hidden_dim_first // 2:]) * mlp[..., :self.mlp_hidden_dim_first // 2]
+        else:
+            mlp_negative = self.mlp_act(mlp_negative)
+            mlp = self.mlp_act(mlp)
+
+        output_negative = self.linear2(torch.cat((attn_negative, mlp_negative), 2))
+        output = self.linear2(torch.cat((attn, mlp), 2))
 
         if txt_length is not None:
             x[:-origin_bsz, context_pad_len:] += apply_mod(output, mod.gate[:-origin_bsz], None, modulation_dims)

@@ -39,6 +39,11 @@
   Flux2 models can use a different positional-ID axis count than older Flux
   models. This fork derives the NAG Flux text-ID shape from the loaded model
   instead of assuming three axes, matching ComfyUI's current Flux behavior.
+- **Flux2 / Flux.2 klein gated MLP compatibility**
+  Current ComfyUI Flux single-stream blocks can use a wider first MLP
+  projection for gated activations. This fork mirrors that split in the NAG
+  single-stream wrapper so Flux2 sampling does not create malformed empty
+  slices.
 - **README Usage section direction** — closes upstream
   [#39](https://github.com/ChenDarYen/ComfyUI-NAG/issues/39).
 - **Packaging / Registry** — `pyproject.toml` plus GitHub Actions for
