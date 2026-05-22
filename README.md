@@ -42,8 +42,9 @@
 - **Flux2 / Flux.2 klein gated MLP compatibility**
   Current ComfyUI Flux2 / Flux.2 klein variants can use a gated single-stream
   MLP layout. This fork keeps those core single-stream blocks untouched for the
-  gated variants and applies NAG only to the double-stream path, avoiding the
-  shape regressions that were crashing sampling.
+  gated or four-axis-ID variants, passes the combined positive/negative RoPE
+  data through to the core blocks, and applies NAG only to the double-stream
+  path to avoid the shape regressions that were crashing sampling.
 - **README Usage section direction** — closes upstream
   [#39](https://github.com/ChenDarYen/ComfyUI-NAG/issues/39).
 - **Packaging / Registry** — `pyproject.toml` plus GitHub Actions for

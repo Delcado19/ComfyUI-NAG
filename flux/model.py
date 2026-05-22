@@ -38,6 +38,45 @@ def make_txt_ids(model, batch_size, context_len, device):
     return txt_ids
 
 
+def uses_core_single_stream(model):
+    axes_dim = getattr(model.params, "axes_dim", [])
+    if len(axes_dim) > 3:
+        return True
+
+    for block in getattr(model, "single_blocks", []):
+        if getattr(block, "yak_mlp", False):
+            return True
+        if getattr(block, "mlp_hidden_dim_first", None) != getattr(block, "mlp_hidden_dim", None):
+            return True
+
+    return False
+
+
+def core_single_stream_forward(
+        self,
+        x,
+        vec,
+        pe,
+        pe_negative=None,
+        attn_mask=None,
+        modulation_dims=None,
+        transformer_options=None,
+        original_forward=None,
+        **kwargs,
+):
+    if pe is not None and pe_negative is not None:
+        pe = torch.cat((pe, pe_negative), dim=0)
+    return original_forward(
+        x,
+        vec=vec,
+        pe=pe,
+        attn_mask=attn_mask,
+        modulation_dims=modulation_dims,
+        transformer_options={} if transformer_options is None else transformer_options,
+        **kwargs,
+    )
+
+
 class NAGFlux(Flux):
     def forward_orig(
         self,
@@ -532,13 +571,10 @@ class NAGFlux(Flux):
             y = torch.cat((y, nag_negative_y.to(y)), dim=0)
             context_pad_len = context.shape[1] - origin_context_len
             nag_pad_len = context.shape[1] - nag_negative_context_len
-            # Flux2 / Flux.2 klein currently still uses the newer gated MLP
-            # single-stream layout in ComfyUI core. Keep those core blocks
-            # untouched here and apply NAG only to the double-stream path to
-            # avoid shape regressions in the single-stream reshaping code.
-            use_nag_single_blocks = not (
-                getattr(self.params, "mlp_silu_act", False) or getattr(self.params, "yak_mlp", False)
-            )
+            # Flux2 / Flux.2 klein uses newer four-axis IDs and can expose a
+            # single-stream layout the NAG wrapper does not reshape safely yet.
+            # Keep those core blocks untouched and apply NAG in double-stream.
+            use_nag_single_blocks = not uses_core_single_stream(self)
 
             forward_orig_ = self.forward_orig
             double_blocks_forward = list()
@@ -597,6 +633,17 @@ class NAGFlux(Flux):
                         ),
                         block,
                     )
+            else:
+                for block in self.single_blocks:
+                    original_forward = block.forward
+                    single_blocks_forward.append(original_forward)
+                    block.forward = MethodType(
+                        partial(
+                            core_single_stream_forward,
+                            original_forward=original_forward,
+                        ),
+                        block,
+                    )
 
             txt_ids = make_txt_ids(self, bs, origin_context_len, x.device)
             txt_ids_negative = make_txt_ids(self, nag_bsz, nag_negative_context_len, x.device)
@@ -608,9 +655,8 @@ class NAGFlux(Flux):
             self.forward_orig = forward_orig_
             for block in self.double_blocks:
                 block.forward = double_blocks_forward.pop(0)
-            if use_nag_single_blocks:
-                for block in self.single_blocks:
-                    block.forward = single_blocks_forward.pop(0)
+            for block in self.single_blocks:
+                block.forward = single_blocks_forward.pop(0)
 
         else:
             txt_ids = make_txt_ids(self, bs, context.shape[1], x.device)
