@@ -66,6 +66,8 @@ class NAGDoubleStreamBlock(DoubleStreamBlock):
         img_k_negative = img_k[-origin_bsz:]
         img_v_negative = img_v[-origin_bsz:]
 
+        # ComfyUI v0.21+ removed this attribute from Flux blocks; absent means
+        # the current core ordering is txt-then-img.
         if getattr(self, "flipped_img_txt", False):
             # run actual attention
             attn_negative = attention(

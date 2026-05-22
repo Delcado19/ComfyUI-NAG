@@ -31,6 +31,10 @@
   [#54](https://github.com/ChenDarYen/ComfyUI-NAG/issues/54),
   [#53](https://github.com/ChenDarYen/ComfyUI-NAG/issues/53),
   [#55](https://github.com/ChenDarYen/ComfyUI-NAG/issues/55).
+- **Flux / Flux Kontext missing `flipped_img_txt` attribute**
+  Recent ComfyUI Flux blocks no longer expose `flipped_img_txt`. This fork
+  treats a missing attribute as ComfyUI's current `txt, img` attention ordering,
+  avoiding an `AttributeError` during Flux and Flux Kontext sampling.
 - **Flux2 / Flux.2 klein position-ID compatibility**
   Flux2 models can use a different positional-ID axis count than older Flux
   models. This fork derives the NAG Flux text-ID shape from the loaded model
