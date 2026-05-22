@@ -22,8 +22,9 @@
   `DoubleStreamBlock` / `SingleStreamBlock` from `comfy.ldm.chroma.layers`.
   Recent ComfyUI versions deprecate those symbols and set them to `None`
   (the real classes moved to `comfy.ldm.flux.layers`), so the import fails
-  with `TypeError: NoneType takes no arguments`. This fork detects the
-  `None` stub and falls back to the new location.
+  with `TypeError: NoneType takes no arguments`. This fork detects both the
+  `None` stub and a missing legacy import path, then falls back to the new
+  location.
   Closes the same root cause as upstream issues
   [#79](https://github.com/ChenDarYen/ComfyUI-NAG/issues/79),
   [#60](https://github.com/ChenDarYen/ComfyUI-NAG/issues/60),

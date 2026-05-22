@@ -2,11 +2,21 @@ import torch
 from torch import Tensor
 
 from comfy.ldm.flux.math import attention
-from comfy.ldm.chroma.layers import DoubleStreamBlock, SingleStreamBlock
 
-# ComfyUI v0.21+ exposes None stubs at comfy.ldm.chroma.layers for the relocated
-# DoubleStreamBlock / SingleStreamBlock classes (see the deprecation comment in
-# comfy/ldm/chroma/layers.py). Fall back to the canonical location in flux.
+# DoubleStreamBlock / SingleStreamBlock used to live at
+# `comfy.ldm.chroma.layers` and now live at `comfy.ldm.flux.layers`.
+# Recent ComfyUI keeps the old import path around as a deprecation stub
+# that exposes the names as `None` (see the "TODO: remove this in a few
+# months" comment in comfy/ldm/chroma/layers.py); a future release is
+# expected to drop the stub entirely. Cover all three cases:
+#   1. legacy ComfyUI where the chroma path still holds the real classes
+#   2. current ComfyUI where the chroma path holds None stubs
+#   3. future ComfyUI where the chroma path is gone
+try:
+    from comfy.ldm.chroma.layers import DoubleStreamBlock, SingleStreamBlock
+except ImportError:
+    DoubleStreamBlock = None
+    SingleStreamBlock = None
 if DoubleStreamBlock is None or SingleStreamBlock is None:
     from comfy.ldm.flux.layers import (
         DoubleStreamBlock,
