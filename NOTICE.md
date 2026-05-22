@@ -33,7 +33,7 @@ and parameter semantics untouched.
 | 2026-05-22 | `4e6b640` | Treat missing `flipped_img_txt` on current ComfyUI Flux blocks as the default `txt, img` attention ordering, avoiding Flux / Flux Kontext `AttributeError` crashes. | `flux/layers.py`, `README.md`, `NOTICE.md` | Delcado19 |
 | 2026-05-22 | — | Harden the Chroma block import fallback so future ComfyUI builds that remove the deprecated `comfy.ldm.chroma.layers` path still fall back to `comfy.ldm.flux.layers`. | `chroma/layers.py`, `README.md`, `NOTICE.md` | Delcado19 |
 | 2026-05-22 | — | Make the Flux NAG wrapper derive text positional-ID dimensions from the loaded model, fixing Flux2 / Flux.2 klein models that use four-axis IDs instead of the older three-axis Flux assumption. | `flux/model.py`, `README.md`, `NOTICE.md` | Delcado19 |
-| 2026-05-22 | — | Mirror ComfyUI's current Flux single-stream MLP split in the NAG wrapper so Flux2 / Flux.2 klein gated-activation models do not produce malformed empty slices during sampling. | `flux/layers.py`, `README.md`, `NOTICE.md` | Delcado19 |
+| 2026-05-22 | — | Keep Flux2 / Flux.2 klein gated-MLP models on the ComfyUI core single-stream path while NAG remains active in the double-stream path, avoiding the shape regression in the NAG single-stream wrapper. | `flux/model.py`, `README.md`, `NOTICE.md` | Delcado19 |
 
 ## Upstream tracking
 

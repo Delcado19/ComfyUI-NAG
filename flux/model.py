@@ -532,6 +532,13 @@ class NAGFlux(Flux):
             y = torch.cat((y, nag_negative_y.to(y)), dim=0)
             context_pad_len = context.shape[1] - origin_context_len
             nag_pad_len = context.shape[1] - nag_negative_context_len
+            # Flux2 / Flux.2 klein currently still uses the newer gated MLP
+            # single-stream layout in ComfyUI core. Keep those core blocks
+            # untouched here and apply NAG only to the double-stream path to
+            # avoid shape regressions in the single-stream reshaping code.
+            use_nag_single_blocks = not (
+                getattr(self.params, "mlp_silu_act", False) or getattr(self.params, "yak_mlp", False)
+            )
 
             forward_orig_ = self.forward_orig
             double_blocks_forward = list()
@@ -577,18 +584,19 @@ class NAGFlux(Flux):
                     ),
                     block,
                 )
-            for block in self.single_blocks:
-                single_blocks_forward.append(block.forward)
-                block.forward = MethodType(
-                    partial(
-                        NAGSingleStreamBlock.forward,
-                        txt_length=context.shape[1],
-                        origin_bsz=nag_bsz,
-                        context_pad_len=context_pad_len,
-                        nag_pad_len=nag_pad_len,
-                    ),
-                    block,
-                )
+            if use_nag_single_blocks:
+                for block in self.single_blocks:
+                    single_blocks_forward.append(block.forward)
+                    block.forward = MethodType(
+                        partial(
+                            NAGSingleStreamBlock.forward,
+                            txt_length=context.shape[1],
+                            origin_bsz=nag_bsz,
+                            context_pad_len=context_pad_len,
+                            nag_pad_len=nag_pad_len,
+                        ),
+                        block,
+                    )
 
             txt_ids = make_txt_ids(self, bs, origin_context_len, x.device)
             txt_ids_negative = make_txt_ids(self, nag_bsz, nag_negative_context_len, x.device)
@@ -600,8 +608,9 @@ class NAGFlux(Flux):
             self.forward_orig = forward_orig_
             for block in self.double_blocks:
                 block.forward = double_blocks_forward.pop(0)
-            for block in self.single_blocks:
-                block.forward = single_blocks_forward.pop(0)
+            if use_nag_single_blocks:
+                for block in self.single_blocks:
+                    block.forward = single_blocks_forward.pop(0)
 
         else:
             txt_ids = make_txt_ids(self, bs, context.shape[1], x.device)
