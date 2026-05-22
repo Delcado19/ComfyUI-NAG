@@ -31,6 +31,10 @@
   [#54](https://github.com/ChenDarYen/ComfyUI-NAG/issues/54),
   [#53](https://github.com/ChenDarYen/ComfyUI-NAG/issues/53),
   [#55](https://github.com/ChenDarYen/ComfyUI-NAG/issues/55).
+- **Flux2 / Flux.2 klein position-ID compatibility**
+  Flux2 models can use a different positional-ID axis count than older Flux
+  models. This fork derives the NAG Flux text-ID shape from the loaded model
+  instead of assuming three axes, matching ComfyUI's current Flux behavior.
 - **README Usage section direction** — closes upstream
   [#39](https://github.com/ChenDarYen/ComfyUI-NAG/issues/39).
 - **Packaging / Registry** — `pyproject.toml` plus GitHub Actions for
@@ -89,7 +93,7 @@ To use NAG, simply replace
 - `BasicGuider` with `NAGGuider`.
 - `CFGGuider` with `NAGCFGGuider`.
 
-We currently support `Flux`, `Flux Kontext`, `Wan`, `Vace Wan`, `Hunyuan Video`, `Choroma`, `SD3.5`, `SDXL` and `SD`.
+We currently support `Flux`, `Flux Kontext`, `Flux2` / `Flux.2 klein`, `Wan`, `Vace Wan`, `Hunyuan Video`, `Chroma`, `SD3.5`, `SDXL` and `SD`.
 
 Example workflows are available in the `./workflows` directory!
 

@@ -20,6 +20,22 @@ from ..utils import cat_context, check_nag_activation, poly1d, get_closure_vars,
 
 
 class NAGFlux(Flux):
+    def make_txt_ids(self, batch_size, context_len, device):
+        txt_ids = torch.zeros(
+            (batch_size, context_len, len(self.params.axes_dim)),
+            device=device,
+            dtype=torch.float32,
+        )
+        for i in getattr(self.params, "txt_ids_dims", []):
+            txt_ids[:, :, i] = torch.linspace(
+                0,
+                context_len - 1,
+                steps=context_len,
+                device=device,
+                dtype=torch.float32,
+            )
+        return txt_ids
+
     def forward_orig(
         self,
         img: Tensor,
@@ -480,7 +496,7 @@ class NAGFlux(Flux):
 
         h_len = ((h_orig + (patch_size // 2)) // patch_size)
         w_len = ((w_orig + (patch_size // 2)) // patch_size)
-        img, img_ids = self.process_img(x)
+        img, img_ids = self.process_img(x, transformer_options=transformer_options)
         img_tokens = img.shape[1]
         if ref_latents is not None:
             h = 0
@@ -493,7 +509,13 @@ class NAGFlux(Flux):
                 else:
                     h_offset = h
 
-                kontext, kontext_ids = self.process_img(ref, index=1, h_offset=h_offset, w_offset=w_offset)
+                kontext, kontext_ids = self.process_img(
+                    ref,
+                    index=1,
+                    h_offset=h_offset,
+                    w_offset=w_offset,
+                    transformer_options=transformer_options,
+                )
                 img = torch.cat([img, kontext], dim=1)
                 img_ids = torch.cat([img_ids, kontext_ids], dim=1)
                 h = max(h, ref.shape[-2] + h_offset)
@@ -565,8 +587,8 @@ class NAGFlux(Flux):
                     block,
                 )
 
-            txt_ids = torch.zeros((bs, origin_context_len, 3), device=x.device, dtype=x.dtype)
-            txt_ids_negative = torch.zeros((nag_bsz, nag_negative_context_len, 3), device=x.device, dtype=x.dtype)
+            txt_ids = self.make_txt_ids(bs, origin_context_len, x.device)
+            txt_ids_negative = self.make_txt_ids(nag_bsz, nag_negative_context_len, x.device)
             out = self.forward_orig(
                 img, img_ids, context, txt_ids, txt_ids_negative, timestep, y, guidance, control, transformer_options,
                      attn_mask=kwargs.get("attention_mask", None),
@@ -579,7 +601,7 @@ class NAGFlux(Flux):
                 block.forward = single_blocks_forward.pop(0)
 
         else:
-            txt_ids = torch.zeros((bs, context.shape[1], 3), device=x.device, dtype=x.dtype)
+            txt_ids = self.make_txt_ids(bs, context.shape[1], x.device)
             out = self.forward_orig(
                 img, img_ids, context, txt_ids, timestep, y, guidance, control, transformer_options,
                 attn_mask=kwargs.get("attention_mask", None),

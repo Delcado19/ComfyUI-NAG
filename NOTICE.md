@@ -31,6 +31,7 @@ and parameter semantics untouched.
 | 2026-05-20 | `f0e5e69` → `2fd1269` | CI hotfix: force CPU mode in the smoke-import job so ComfyUI's `model_management.py` does not call `torch.cuda.current_device()` on a CPU-only runner. First via `sys.argv = ['comfyui', '--cpu']` (insufficient), then via direct `comfy.cli_args.args.cpu = True` patch. | `.github/workflows/smoke-import.yml` | Delcado19 |
 | 2026-05-20 | — | First publish to Comfy Registry as [`comfyui-nag-delcado`](https://registry.comfy.org/nodes/comfyui-nag-delcado) version `1.0.1`. | — | Delcado19 |
 | 2026-05-22 | — | Harden the Chroma block import fallback so future ComfyUI builds that remove the deprecated `comfy.ldm.chroma.layers` path still fall back to `comfy.ldm.flux.layers`. | `chroma/layers.py`, `README.md`, `NOTICE.md` | Delcado19 |
+| 2026-05-22 | — | Make the Flux NAG wrapper derive text positional-ID dimensions from the loaded model, fixing Flux2 / Flux.2 klein models that use four-axis IDs instead of the older three-axis Flux assumption. | `flux/model.py`, `README.md`, `NOTICE.md` | Delcado19 |
 
 ## Upstream tracking
 
