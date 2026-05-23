@@ -26,6 +26,7 @@ import comfy.sampler_helpers
 import comfy.model_patcher
 import comfy.patcher_extension
 import comfy.hooks
+import comfy.utils
 from comfy.ldm.flux.model import Flux
 from comfy.ldm.chroma.model import Chroma
 from comfy.ldm.modules.diffusionmodules.openaimodel import UNetModel
@@ -41,6 +42,31 @@ from .sd3.mmdit import NAGOpenAISignatureMMDITWrapperSwitch
 from .wan.model import NAGWanModelSwitch
 from .hunyuan_video.model import NAGHunyuanVideoSwitch
 from .hidream.model import NAGHiDreamImageTransformer2DModelSwitch
+
+
+def _normalize_nag_negative_cond(nag_negative_cond, batch_size):
+    if not nag_negative_cond:
+        raise ValueError("NAG negative conditioning is empty.")
+
+    context = nag_negative_cond[0][0]
+    if not torch.is_tensor(context) or context.ndim != 3:
+        raise ValueError("NAG negative conditioning must be a 3D tensor.")
+    if context.shape[0] == 0:
+        raise ValueError("NAG negative conditioning has an empty batch dimension.")
+
+    context = comfy.utils.repeat_to_batch_size(context, batch_size)
+    if context.shape[1] == 0:
+        # Empty prompts can produce zero text tokens on newer Flux-style text
+        # encoders; keep NAG's direct conditioning path reshape-safe.
+        context = context.new_zeros((context.shape[0], 1, context.shape[2]))
+    nag_negative_cond[0][0] = context
+
+    pooled_output = nag_negative_cond[0][1].get("pooled_output", None)
+    if torch.is_tensor(pooled_output):
+        nag_negative_cond[0][1]["pooled_output"] = comfy.utils.repeat_to_batch_size(
+            pooled_output,
+            batch_size,
+        )
 
 
 def sample_with_nag(
@@ -141,6 +167,7 @@ class NAGCFGGuider(CFGGuider):
         apply_guidance = self.nag_scale > 1.
 
         self.nag_negative_cond = None
+        switcher = None
         if apply_guidance:
             self.nag_negative_cond = copy.deepcopy(self.origin_nag_negative_cond)
 
@@ -166,9 +193,7 @@ class NAGCFGGuider(CFGGuider):
                 raise ValueError(
                     f"Model type {model_type} is not support for NAGCFGGuider"
                 )
-            self.nag_negative_cond[0][0] = self.nag_negative_cond[0][0].expand(self.batch_size, -1, -1)
-            if self.nag_negative_cond[0][1].get("pooled_output", None) is not None:
-                self.nag_negative_cond[0][1]["pooled_output"] = self.nag_negative_cond[0][1]["pooled_output"].expand(self.batch_size, -1)
+            _normalize_nag_negative_cond(self.nag_negative_cond, self.batch_size)
             switcher = switcher_cls(
                 model,
                 self.nag_negative_cond,
@@ -205,9 +230,8 @@ class NAGCFGGuider(CFGGuider):
             self.model_options = orig_model_options
             self.model_patcher.hook_mode = orig_hook_mode
             self.model_patcher.restore_hook_patches()
-
-        if apply_guidance:
-            switcher.set_origin()
+            if switcher is not None:
+                switcher.set_origin()
 
         del self.conds
         del self.nag_negative_cond

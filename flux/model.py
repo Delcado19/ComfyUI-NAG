@@ -52,6 +52,19 @@ def uses_core_single_stream(model):
     return False
 
 
+def _pad_pe_txt_front(pe, txt_len, pad_len):
+    # pe layout from EmbedND: (batch, 1, seq, head_dim/2, 2, 2).
+    # The first `txt_len` entries along seq are txt positions, the rest are
+    # img positions. Left-pad the txt portion by repeating its first entry so
+    # the seq dim matches the padded txt length used in NAG single-stream.
+    if pad_len <= 0:
+        return pe
+    txt_pe = pe[:, :, :txt_len]
+    img_pe = pe[:, :, txt_len:]
+    front = txt_pe[:, :, :1].expand(*txt_pe.shape[:2], pad_len, *txt_pe.shape[3:])
+    return torch.cat([front, txt_pe, img_pe], dim=2)
+
+
 def core_single_stream_forward(
         self,
         x,
@@ -62,9 +75,23 @@ def core_single_stream_forward(
         modulation_dims=None,
         transformer_options=None,
         original_forward=None,
+        txt_length=None,
+        context_pad_len=0,
+        nag_pad_len=0,
         **kwargs,
 ):
     if pe is not None and pe_negative is not None:
+        # pe / pe_negative were built from the *unpadded* txt_ids of each
+        # batch, so their seq lengths differ whenever the positive and
+        # negative contexts have different token counts (e.g. Flux.2 with
+        # short uncond / long cond). The core single-stream block runs over
+        # the padded txt+img sequence, so left-pad each pe along the txt
+        # axis to the shared padded length before stacking over batch.
+        # Fixes the "Sizes of tensors must match" error reported for the
+        # Flux.2 klein 9B NAG workflow.
+        if txt_length is not None:
+            pe = _pad_pe_txt_front(pe, txt_length - context_pad_len, context_pad_len)
+            pe_negative = _pad_pe_txt_front(pe_negative, txt_length - nag_pad_len, nag_pad_len)
         pe = torch.cat((pe, pe_negative), dim=0)
     return original_forward(
         x,
@@ -75,6 +102,33 @@ def core_single_stream_forward(
         transformer_options={} if transformer_options is None else transformer_options,
         **kwargs,
     )
+
+
+def flux_vector_fallback(model, batch_size, reference):
+    if getattr(model, "vector_in", None) is None or model.params.vec_in_dim is None:
+        return None
+    return torch.zeros(
+        (batch_size, model.params.vec_in_dim),
+        device=reference.device,
+        dtype=reference.dtype,
+    )
+
+
+def normalize_nag_negative_y(y, nag_negative_y, nag_bsz):
+    if y is None:
+        return None
+    if nag_negative_y is None:
+        # Flux2 GGUF text encoders can omit pooled_output for CLIPTextEncode.
+        # NAG still needs a vector branch, so use a neutral vector with the
+        # same shape and dtype as the positive conditioning.
+        return y.new_zeros((nag_bsz, *y.shape[1:]))
+
+    nag_negative_y = nag_negative_y.to(y)
+    if nag_negative_y.shape[0] == 0:
+        return y.new_zeros((nag_bsz, *y.shape[1:]))
+    if nag_negative_y.shape[0] != nag_bsz:
+        nag_negative_y = nag_negative_y[:1].expand(nag_bsz, *nag_negative_y.shape[1:])
+    return nag_negative_y
 
 
 class NAGFlux(Flux):
@@ -92,8 +146,9 @@ class NAGFlux(Flux):
         transformer_options={},
         attn_mask: Tensor = None,
     ) -> Tensor:
-        if y is None:
-            y = torch.zeros((img.shape[0], self.params.vec_in_dim), device=img.device, dtype=img.dtype)
+        if self.vector_in is not None:
+            if y is None:
+                y = torch.zeros((img.shape[0], self.params.vec_in_dim), device=img.device, dtype=img.dtype)
 
         patches_replace = transformer_options.get("patches_replace", {})
         if img.ndim != 3 or txt.ndim != 3:
@@ -109,7 +164,16 @@ class NAGFlux(Flux):
         origin_bsz = len(txt) - len(img)
         vec = torch.cat((vec, vec[-origin_bsz:]), dim=0)
 
-        vec = vec + self.vector_in(y[:,:self.params.vec_in_dim])
+        if self.vector_in is not None:
+            vec = vec + self.vector_in(y[:,:self.params.vec_in_dim])
+        vec_orig = vec
+        if self.params.global_modulation:
+            double_vec = (
+                self.double_stream_modulation_img(vec_orig),
+                self.double_stream_modulation_txt(vec_orig),
+            )
+        else:
+            double_vec = vec
         txt = self.txt_in(txt)
 
         if img_ids is not None:
@@ -136,7 +200,7 @@ class NAGFlux(Flux):
 
                 out = blocks_replace[("double_block", i)]({"img": img,
                                                            "txt": txt,
-                                                           "vec": vec,
+                                                           "vec": double_vec,
                                                            "pe": pe,
                                                            "pe_negative": pe_negative,
                                                            "attn_mask": attn_mask,
@@ -147,7 +211,7 @@ class NAGFlux(Flux):
             else:
                 img, txt = block(img=img,
                                  txt=txt,
-                                 vec=vec,
+                                 vec=double_vec,
                                  pe=pe,
                                  pe_negative=pe_negative,
                                  attn_mask=attn_mask)
@@ -164,6 +228,10 @@ class NAGFlux(Flux):
 
         img = torch.cat((img, img[-origin_bsz:]), dim=0)
         img = torch.cat((txt, img), 1)
+        if self.params.global_modulation:
+            single_vec, _ = self.single_stream_modulation(vec_orig)
+        else:
+            single_vec = vec
 
         for i, block in enumerate(self.single_blocks):
             if ("single_block", i) in blocks_replace:
@@ -177,7 +245,7 @@ class NAGFlux(Flux):
                     return out
 
                 out = blocks_replace[("single_block", i)]({"img": img,
-                                                           "vec": vec,
+                                                           "vec": single_vec,
                                                            "pe": pe,
                                                            "pe_negative": pe_negative,
                                                            "attn_mask": attn_mask,
@@ -185,7 +253,7 @@ class NAGFlux(Flux):
                                                           {"original_block": block_wrap})
                 img = out["img"]
             else:
-                img = block(img, vec=vec, pe=pe, pe_negative=pe_negative, attn_mask=attn_mask)
+                img = block(img, vec=single_vec, pe=pe, pe_negative=pe_negative, attn_mask=attn_mask)
 
             if control is not None: # Controlnet
                 control_o = control.get("output")
@@ -197,7 +265,8 @@ class NAGFlux(Flux):
         img = img[:-origin_bsz]
         img = img[:, txt.shape[1] :, ...]
 
-        img = self.final_layer(img, vec[:-origin_bsz])  # (N, T, patch_size ** 2 * out_channels)
+        final_vec = vec_orig if self.params.global_modulation else vec
+        img = self.final_layer(img, final_vec[:-origin_bsz])  # (N, T, patch_size ** 2 * out_channels)
         return img
 
     def forward_orig_with_teacache(
@@ -219,8 +288,9 @@ class NAGFlux(Flux):
         coefficients = transformer_options.get("coefficients")
         cache_device = transformer_options.get("cache_device")
 
-        if y is None:
-            y = torch.zeros((img.shape[0], self.params.vec_in_dim), device=img.device, dtype=img.dtype)
+        if self.vector_in is not None:
+            if y is None:
+                y = torch.zeros((img.shape[0], self.params.vec_in_dim), device=img.device, dtype=img.dtype)
 
         patches_replace = transformer_options.get("patches_replace", {})
         if img.ndim != 3 or txt.ndim != 3:
@@ -236,7 +306,8 @@ class NAGFlux(Flux):
         origin_bsz = len(txt) - len(img)
         vec = torch.cat((vec, vec[-origin_bsz:]), dim=0)
 
-        vec = vec + self.vector_in(y[:,:self.params.vec_in_dim])
+        if self.vector_in is not None:
+            vec = vec + self.vector_in(y[:,:self.params.vec_in_dim])
         txt = self.txt_in(txt)
 
         if img_ids is not None:
@@ -381,8 +452,9 @@ class NAGFlux(Flux):
         apply_prev_hidden_states_residual: Callable = None,
         set_buffer: Callable = None,
     ) -> Tensor:
-        if y is None:
-            y = torch.zeros((img.shape[0], self.params.vec_in_dim), device=img.device, dtype=img.dtype)
+        if self.vector_in is not None:
+            if y is None:
+                y = torch.zeros((img.shape[0], self.params.vec_in_dim), device=img.device, dtype=img.dtype)
 
         patches_replace = transformer_options.get("patches_replace", {})
         if img.ndim != 3 or txt.ndim != 3:
@@ -398,7 +470,8 @@ class NAGFlux(Flux):
         origin_bsz = len(txt) - len(img)
         vec = torch.cat((vec, vec[-origin_bsz:]), dim=0)
 
-        vec = vec + self.vector_in(y[:,:self.params.vec_in_dim])
+        if self.vector_in is not None:
+            vec = vec + self.vector_in(y[:,:self.params.vec_in_dim])
         txt = self.txt_in(txt)
 
         if img_ids is not None:
@@ -565,10 +638,14 @@ class NAGFlux(Flux):
 
         apply_nag = check_nag_activation(transformer_options, nag_sigma_end)
         if apply_nag:
+            if y is None and self.vector_in is not None:
+                y = flux_vector_fallback(self, bs, img)
             origin_context_len = context.shape[1]
             nag_bsz, nag_negative_context_len = nag_negative_context.shape[:2]
             context = cat_context(context, nag_negative_context, trim_context=True)
-            y = torch.cat((y, nag_negative_y.to(y)), dim=0)
+            nag_negative_y = normalize_nag_negative_y(y, nag_negative_y, nag_bsz)
+            if y is not None and nag_negative_y is not None:
+                y = torch.cat((y, nag_negative_y), dim=0)
             context_pad_len = context.shape[1] - origin_context_len
             nag_pad_len = context.shape[1] - nag_negative_context_len
             # Flux2 / Flux.2 klein uses newer four-axis IDs and can expose a
@@ -641,32 +718,66 @@ class NAGFlux(Flux):
                         partial(
                             core_single_stream_forward,
                             original_forward=original_forward,
+                            # Needed so pe / pe_negative can be padded to the
+                            # shared txt length before cat over batch when the
+                            # positive and negative contexts differ in length.
+                            txt_length=context.shape[1],
+                            context_pad_len=context_pad_len,
+                            nag_pad_len=nag_pad_len,
                         ),
                         block,
                     )
 
-            txt_ids = make_txt_ids(self, bs, origin_context_len, x.device)
-            txt_ids_negative = make_txt_ids(self, nag_bsz, nag_negative_context_len, x.device)
-            out = self.forward_orig(
-                img, img_ids, context, txt_ids, txt_ids_negative, timestep, y, guidance, control, transformer_options,
-                     attn_mask=kwargs.get("attention_mask", None),
-            )
-
-            self.forward_orig = forward_orig_
-            for block in self.double_blocks:
-                block.forward = double_blocks_forward.pop(0)
-            for block in self.single_blocks:
-                block.forward = single_blocks_forward.pop(0)
+            try:
+                txt_ids = make_txt_ids(self, bs, origin_context_len, x.device)
+                txt_ids_negative = make_txt_ids(self, nag_bsz, nag_negative_context_len, x.device)
+                out = self.forward_orig(
+                    img,
+                    img_ids,
+                    context,
+                    txt_ids,
+                    txt_ids_negative,
+                    timestep,
+                    y,
+                    guidance=guidance,
+                    control=control,
+                    transformer_options=transformer_options,
+                    attn_mask=kwargs.get("attention_mask", None),
+                )
+            finally:
+                self.forward_orig = forward_orig_
+                for block, block_forward in zip(self.double_blocks, double_blocks_forward):
+                    block.forward = block_forward
+                for block, block_forward in zip(self.single_blocks, single_blocks_forward):
+                    block.forward = block_forward
 
         else:
             txt_ids = make_txt_ids(self, bs, context.shape[1], x.device)
             out = self.forward_orig(
-                img, img_ids, context, txt_ids, timestep, y, guidance, control, transformer_options,
+                img,
+                img_ids,
+                context,
+                txt_ids,
+                timestep,
+                y,
+                guidance=guidance,
+                control=control,
+                transformer_options=transformer_options,
                 attn_mask=kwargs.get("attention_mask", None),
             )
 
         out = out[:, :img_tokens]
-        return rearrange(out, "b (h w) (c ph pw) -> b c (h ph) (w pw)", h=h_len, w=w_len, ph=2, pw=2)[:, :, :h_orig, :w_orig]
+        # Flux2 uses patch_size=1 and 128 latent channels; the original Flux
+        # wrapper assumed patch_size=2, which reshaped Flux2 outputs to 32
+        # channels and broke ComfyUI's denoised calculation.
+        return rearrange(
+            out,
+            "b (h w) (c ph pw) -> b c (h ph) (w pw)",
+            h=h_len,
+            w=w_len,
+            ph=self.patch_size,
+            pw=self.patch_size,
+        )[:, :, :h_orig, :w_orig]
 
 
 class NAGFluxSwitch(NAGSwitch):
@@ -675,7 +786,9 @@ class NAGFluxSwitch(NAGSwitch):
             partial(
                 NAGFlux.forward,
                 nag_negative_context=self.nag_negative_cond[0][0],
-                nag_negative_y=self.nag_negative_cond[0][1]["pooled_output"],
+                # Some Flux2/GGUF CLIP encoders omit pooled_output; NAGFlux
+                # handles None without disabling the attention-guidance patch.
+                nag_negative_y=self.nag_negative_cond[0][1].get("pooled_output"),
                 nag_sigma_end=self.nag_sigma_end,
             ),
             self.model,

@@ -7,6 +7,46 @@ from .samplers import NAGCFGGuider as samplers_NAGCFGGuider
 from .sample import sample_with_nag, sample_custom_with_nag
 
 
+NAG_FLOAT_INPUTS = {
+    "nag_scale": {
+        "default": 5.0,
+        "min": 0.0,
+        "max": 100.0,
+        "step": 0.1,
+        "round": 0.01,
+        "tooltip": "Attention feature extrapolation strength. Valid range: 0.0 to 100.0; default: 5.0. NAG guidance is only applied when this is greater than 1.0.",
+    },
+    "nag_tau": {
+        "default": 2.5,
+        "min": 1.0,
+        "max": 10.0,
+        "step": 0.1,
+        "round": 0.01,
+        "tooltip": "Normalization threshold. Valid range: 1.0 to 10.0; default: 2.5. Higher values produce stronger negative guidance.",
+    },
+    "nag_alpha": {
+        "default": 0.25,
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.01,
+        "round": 0.01,
+        "tooltip": "Blend between original and extrapolated attention. Valid range: 0.0 to 1.0; default: 0.25. Higher values produce stronger negative guidance.",
+    },
+    "nag_sigma_end": {
+        "default": 0.0,
+        "min": 0.0,
+        "max": 20.0,
+        "step": 0.01,
+        "round": 0.01,
+        "tooltip": "Stop applying NAG once sampling reaches this sigma. Valid range: 0.0 to 20.0; default: 0.0. Flow models such as Flux often work well around 0.75.",
+    },
+}
+
+
+def _nag_float_input(name):
+    return ("FLOAT", NAG_FLOAT_INPUTS[name].copy())
+
+
 def common_ksampler_with_nag(model, seed, steps, cfg, nag_scale, nag_tau, nag_alpha, nag_sigma_end, sampler_name,
                              scheduler, positive, negative, nag_negative, latent, denoise=1.0, disable_noise=False,
                              start_step=None, last_step=None, force_full_denoise=False, **kwargs):
@@ -45,10 +85,10 @@ class NAGGuider:
                 "model": ("MODEL",),
                 "conditioning": ("CONDITIONING",),
                 "nag_negative": ("CONDITIONING",),
-                "nag_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-                "nag_tau": ("FLOAT", {"default": 2.5, "min": 1.0, "max": 10.0, "step": 0.1, "round": 0.01}),
-                "nag_alpha": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.01}),
-                "nag_sigma_end": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 20.0, "step": 0.01, "round": 0.01}),
+                "nag_scale": _nag_float_input("nag_scale"),
+                "nag_tau": _nag_float_input("nag_tau"),
+                "nag_alpha": _nag_float_input("nag_alpha"),
+                "nag_sigma_end": _nag_float_input("nag_sigma_end"),
                 "latent_image": ("LATENT",),
             }
         }
@@ -87,10 +127,10 @@ class NAGCFGGuider:
                 "negative": ("CONDITIONING",),
                 "nag_negative": ("CONDITIONING",),
                 "cfg": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-                "nag_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-                "nag_tau": ("FLOAT", {"default": 2.5, "min": 1.0, "max": 10.0, "step": 0.1, "round": 0.01}),
-                "nag_alpha": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.01}),
-                "nag_sigma_end": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 20.0, "step": 0.01, "round": 0.01}),
+                "nag_scale": _nag_float_input("nag_scale"),
+                "nag_tau": _nag_float_input("nag_tau"),
+                "nag_alpha": _nag_float_input("nag_alpha"),
+                "nag_sigma_end": _nag_float_input("nag_sigma_end"),
                 "latent_image": ("LATENT",),
             }
         }
@@ -134,10 +174,10 @@ class KSamplerWithNAG:
                                   "tooltip": "The number of steps used in the denoising process."}),
                 "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01,
                                   "tooltip": "The Classifier-Free Guidance scale balances creativity and adherence to the prompt. Higher values result in images more closely matching the prompt however too high values will negatively impact quality."}),
-                "nag_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-                "nag_tau": ("FLOAT", {"default": 2.5, "min": 1.0, "max": 10.0, "step": 0.1, "round": 0.01}),
-                "nag_alpha": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.01}),
-                "nag_sigma_end": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 20.0, "step": 0.01, "round": 0.01}),
+                "nag_scale": _nag_float_input("nag_scale"),
+                "nag_tau": _nag_float_input("nag_tau"),
+                "nag_alpha": _nag_float_input("nag_alpha"),
+                "nag_sigma_end": _nag_float_input("nag_sigma_end"),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS, {
                     "tooltip": "The algorithm used when sampling, this can affect the quality, speed, and style of the generated output."}),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,
@@ -179,10 +219,10 @@ class KSamplerAdvancedWithNAG:
                     "INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
                 "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
                 "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-                "nag_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-                "nag_tau": ("FLOAT", {"default": 2.5, "min": 1.0, "max": 10.0, "step": 0.1, "round": 0.01}),
-                "nag_alpha": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.01}),
-                "nag_sigma_end": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 20.0, "step": 0.01, "round": 0.01}),
+                "nag_scale": _nag_float_input("nag_scale"),
+                "nag_tau": _nag_float_input("nag_tau"),
+                "nag_alpha": _nag_float_input("nag_alpha"),
+                "nag_sigma_end": _nag_float_input("nag_sigma_end"),
                 "sampler_name": (comfy.samplers.KSampler.SAMPLERS,),
                 "scheduler": (comfy.samplers.KSampler.SCHEDULERS,),
                 "positive": ("CONDITIONING",),
@@ -229,10 +269,10 @@ class SamplerCustomWithNAG:
             "add_noise": ("BOOLEAN", {"default": True}),
             "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff, "control_after_generate": True}),
             "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-            "nag_scale": ("FLOAT", {"default": 5.0, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
-            "nag_tau": ("FLOAT", {"default": 2.5, "min": 1.0, "max": 10.0, "step": 0.1, "round": 0.01}),
-            "nag_alpha": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01, "round": 0.01}),
-            "nag_sigma_end": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 20.0, "step": 0.01, "round": 0.01}),
+            "nag_scale": _nag_float_input("nag_scale"),
+            "nag_tau": _nag_float_input("nag_tau"),
+            "nag_alpha": _nag_float_input("nag_alpha"),
+            "nag_sigma_end": _nag_float_input("nag_sigma_end"),
             "positive": ("CONDITIONING",),
             "negative": ("CONDITIONING",),
             "nag_negative": ("CONDITIONING", {

@@ -44,7 +44,31 @@
   MLP layout. This fork keeps those core single-stream blocks untouched for the
   gated or four-axis-ID variants, passes the combined positive/negative RoPE
   data through to the core blocks, and applies NAG only to the double-stream
-  path to avoid the shape regressions that were crashing sampling.
+  path to avoid the shape regressions that were crashing sampling. The combined
+  RoPE is also left-padded along the txt axis to the shared padded txt length
+  when the positive and negative contexts differ in token count, fixing
+  `RuntimeError: Sizes of tensors must match except in dimension 0. Expected
+  size 6052 but got size 4388` on Flux.2 klein 9B NAG workflows where the
+  positive and uncond contexts have different lengths.
+- **SamplerCustomAdvanced empty-token / batch compatibility**
+  NAG's direct `nag_negative` conditioning path now repeats the NAG negative
+  tensor to the latent batch size using ComfyUI's batching helper and replaces
+  zero-token text conditioning with a minimal zero-token fallback. This avoids
+  shape errors such as `shape '[2, 0, 4096]' is invalid for input of size 4096`
+  when custom samplers run batched Flux-style workflows with empty or very short
+  NAG negative prompts. Flux2 paths that omit pooled CLIP output for
+  `nag_negative` now either use a neutral vector fallback or skip vector
+  conditioning when the model has no vector branch, avoiding
+  `'NoneType' object has no attribute 'to'` crashes in `SamplerCustomAdvanced`.
+  Flux2 global-modulation blocks are handled through ComfyUI's tuple-based
+  modulation path, so NAG no longer expects removed `img_mod` / `txt_mod`
+  block attributes.
+- **Flux2 / current ComfyUI forward compatibility**
+  The Flux NAG wrapper now preserves the loaded model's `patch_size` when
+  reshaping outputs, so Flux2 128-channel latents are not collapsed into the
+  older Flux 32-channel layout. It also passes optional ComfyUI Flux forward
+  parameters by keyword, keeping the NAG path aligned with current ComfyUI
+  signatures that added positional arguments after `attn_mask`.
 - **README Usage section direction** — closes upstream
   [#39](https://github.com/ChenDarYen/ComfyUI-NAG/issues/39).
 - **Packaging / Registry** — `pyproject.toml` plus GitHub Actions for
@@ -103,7 +127,7 @@ To use NAG, simply replace
 - `BasicGuider` with `NAGGuider`.
 - `CFGGuider` with `NAGCFGGuider`.
 
-We currently support `Flux`, `Flux Kontext`, `Flux2` / `Flux.2 klein`, `Wan`, `Vace Wan`, `Hunyuan Video`, `Chroma`, `SD3.5`, `SDXL` and `SD`.
+We currently support `Flux`, `Flux Kontext`, `Flux2` / `Flux.2 klein`, `Wan`, `Vace Wan`, `Hunyuan Video`, `HiDream`, `Chroma`, `SD3.5`, `SDXL` and `SD`.
 
 Example workflows are available in the `./workflows` directory!
 
@@ -121,6 +145,16 @@ For flow-based models like `Flux`, `nag_sigma_end = 0.75` achieves near-identica
 - `nag_tau`: The normalisation threshold. Higher values result in stronger negative guidance.
 - `nag_alpha`: Blending factor between original and extrapolated attention. Higher values result in stronger negative guidance.
 - `nag_sigma_end`: NAG will be active only until `nag_sigma_end`.
+
+ComfyUI validates these ranges before running the prompt. Values outside the
+allowed range are rejected rather than clamped automatically.
+
+| Input | Minimum | Maximum | Default | Notes |
+|-------|---------|---------|---------|-------|
+| `nag_scale` | `0.0` | `100.0` | `5.0` | NAG guidance is applied only when `nag_scale > 1.0`. |
+| `nag_tau` | `1.0` | `10.0` | `2.5` | Normalization threshold. |
+| `nag_alpha` | `0.0` | `1.0` | `0.25` | Attention blend factor. |
+| `nag_sigma_end` | `0.0` | `20.0` | `0.0` | For Flux-style models, `0.75` is a useful speed/quality default. |
 
 ### Rule of Thumb
 

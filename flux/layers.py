@@ -7,6 +7,14 @@ from comfy.ldm.flux.layers import DoubleStreamBlock, SingleStreamBlock, apply_mo
 from ..utils import nag
 
 
+def slice_modulation(mod, batch_slice):
+    return type(mod)(
+        mod.shift[batch_slice],
+        mod.scale[batch_slice],
+        mod.gate[batch_slice],
+    )
+
+
 class NAGDoubleStreamBlock(DoubleStreamBlock):
     def __init__(
             self,
@@ -39,8 +47,15 @@ class NAGDoubleStreamBlock(DoubleStreamBlock):
         origin_bsz = len(txt) - len(img)
         assert origin_bsz != 0
 
-        img_mod1, img_mod2 = self.img_mod(vec[:-origin_bsz])
-        txt_mod1, txt_mod2 = self.txt_mod(vec)
+        if self.modulation:
+            img_mod1, img_mod2 = self.img_mod(vec[:-origin_bsz])
+            txt_mod1, txt_mod2 = self.txt_mod(vec)
+        else:
+            # Flux2 global-modulation blocks receive precomputed modulation
+            # tuples from the model instead of per-block img_mod/txt_mod layers.
+            (img_mod1, img_mod2), (txt_mod1, txt_mod2) = vec
+            img_mod1 = slice_modulation(img_mod1, slice(None, -origin_bsz))
+            img_mod2 = slice_modulation(img_mod2, slice(None, -origin_bsz))
 
         # prepare image for attention
         img_modulated = self.img_norm1(img)
