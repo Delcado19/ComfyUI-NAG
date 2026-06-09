@@ -49,6 +49,16 @@ and parameter semantics untouched.
 - To incorporate future upstream changes:
   `git fetch upstream && git merge upstream/main`
 
+## Possible future work
+
+- Z-Image / Z-Image Turbo support would likely need a dedicated `Lumina` / `NextDiT`
+  NAG switch, because the current sampler dispatch only covers `Flux`, `Chroma`,
+  `UNetModel`, `OpenAISignatureMMDITWrapper`, `Wan`, `HunyuanVideo`, and
+  `HiDream`.
+- The current code paths do not route `comfy.ldm.lumina.model.NextDiT` through
+  NAG yet, so Z-Image-family work remains a future compatibility task rather
+  than an implemented feature.
+
 ## License
 
 The MIT license in `LICENSE` covers both the upstream code and the
