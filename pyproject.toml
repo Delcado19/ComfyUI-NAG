@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-nag-delcado"
 description = "Maintenance fork of ChenDarYen/ComfyUI-NAG (Normalized Attention Guidance) with compatibility patches for ComfyUI v0.21+."
-version = "1.0.2"
+version = "1.0.3"
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10"
