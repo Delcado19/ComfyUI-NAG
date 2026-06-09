@@ -13,12 +13,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out fork
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: ComfyUI-NAG
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
