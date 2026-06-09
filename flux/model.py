@@ -657,10 +657,21 @@ class NAGFlux(Flux):
             double_blocks_forward = list()
             single_blocks_forward = list()
 
-            if transformer_options.get("enable_teacache", False):
+            # The teacache / wavespeed forward_orig variants predate Flux2 and do
+            # not implement global_modulation: they pass the raw `vec` to every
+            # block and to final_layer. For a global-modulation (Flux2) model the
+            # blocks expect precomputed modulation tuples instead, so routing
+            # Flux2 through those variants crashes (e.g. double_blocks[0].img_mod
+            # does not exist) or produces wrong modulation. Until the cache
+            # variants learn global_modulation, fall back to the correct
+            # (uncached) base forward_orig for Flux2 — NAG stays correct, only the
+            # cache speed-up is skipped. Classic Flux keeps the cache paths.
+            global_modulation = getattr(self.params, "global_modulation", False)
+
+            if not global_modulation and transformer_options.get("enable_teacache", False):
                 self.forward_orig = MethodType(NAGFlux.forward_orig_with_teacache, self)
 
-            elif is_from_wavespeed(forward_orig_):
+            elif not global_modulation and is_from_wavespeed(forward_orig_):
                 get_can_use_cache = forward_orig_.__globals__["get_can_use_cache"]
                 set_buffer = forward_orig_.__globals__["set_buffer"]
                 apply_prev_hidden_states_residual = forward_orig_.__globals__["apply_prev_hidden_states_residual"]

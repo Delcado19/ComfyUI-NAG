@@ -414,14 +414,18 @@ class NAGWanModel(WanModel):
         img_ids = repeat(img_ids, "t h w c -> b (t h w) c", b=bs)
 
         freqs = self.rope_embedder(img_ids).movedim(1, 2)
-        output = self.forward_orig(
-            x, timestep, context, clip_fea=clip_fea, freqs=freqs,
-            transformer_options=transformer_options, **kwargs)[:, :, :t, :h, :w]
-
-        if apply_nag:
-            self.forward_orig = forward_orig_
-            for mod, forward_fn in cross_attns_forward:
-                mod.forward = forward_fn
+        try:
+            output = self.forward_orig(
+                x, timestep, context, clip_fea=clip_fea, freqs=freqs,
+                transformer_options=transformer_options, **kwargs)[:, :, :t, :h, :w]
+        finally:
+            # Restore forward_orig and the patched cross-attn forwards even if the
+            # forward raises (OOM / user interrupt), so the model is not left
+            # patched for subsequent generations.
+            if apply_nag:
+                self.forward_orig = forward_orig_
+                for mod, forward_fn in cross_attns_forward:
+                    mod.forward = forward_fn
 
         return output
 
@@ -691,13 +695,17 @@ class NAGVaceWanModel(VaceWanModel):
         img_ids = repeat(img_ids, "t h w c -> b (t h w) c", b=bs)
 
         freqs = self.rope_embedder(img_ids).movedim(1, 2)
-        output = self.forward_orig(x, timestep, context, clip_fea=clip_fea, freqs=freqs,
-                                 transformer_options=transformer_options, **kwargs)[:, :, :t, :h, :w]
-
-        if apply_nag:
-            self.forward_orig = forward_orig_
-            for mod, forward_fn in cross_attns_forward:
-                mod.forward = forward_fn
+        try:
+            output = self.forward_orig(x, timestep, context, clip_fea=clip_fea, freqs=freqs,
+                                     transformer_options=transformer_options, **kwargs)[:, :, :t, :h, :w]
+        finally:
+            # Restore forward_orig and the patched cross-attn forwards even if the
+            # forward raises (OOM / user interrupt), so the model is not left
+            # patched for subsequent generations.
+            if apply_nag:
+                self.forward_orig = forward_orig_
+                for mod, forward_fn in cross_attns_forward:
+                    mod.forward = forward_fn
 
         return output
 

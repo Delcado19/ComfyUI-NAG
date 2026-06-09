@@ -308,30 +308,34 @@ class NAGOpenAISignatureMMDITWrapper(OpenAISignatureMMDITWrapper):
                     block,
                 )
 
-        if self.context_processor is not None:
-            context = self.context_processor(context)
+        try:
+            if self.context_processor is not None:
+                context = self.context_processor(context)
 
-        hw = x.shape[-2:]
-        x = self.x_embedder(x) + comfy.ops.cast_to_input(self.cropped_pos_embed(hw, device=x.device), x)
-        c = self.t_embedder(timesteps, dtype=x.dtype)  # (N, D)
+            hw = x.shape[-2:]
+            x = self.x_embedder(x) + comfy.ops.cast_to_input(self.cropped_pos_embed(hw, device=x.device), x)
+            c = self.t_embedder(timesteps, dtype=x.dtype)  # (N, D)
 
-        if apply_nag:
-            origin_bsz = len(context) - len(x)
-            c = torch.cat((c, c[-origin_bsz:]), dim=0)
+            if apply_nag:
+                origin_bsz = len(context) - len(x)
+                c = torch.cat((c, c[-origin_bsz:]), dim=0)
 
-        if y is not None and self.y_embedder is not None:
-            y = self.y_embedder(y)  # (N, D)
-            c = c + y  # (N, D)
+            if y is not None and self.y_embedder is not None:
+                y = self.y_embedder(y)  # (N, D)
+                c = c + y  # (N, D)
 
-        if context is not None:
-            context = self.context_embedder(context)
+            if context is not None:
+                context = self.context_embedder(context)
 
-        x = self.forward_core_with_concat(x, c, context, control, transformer_options)
-
-        if apply_nag:
-            self.forward_core_with_concat = forward_core_with_concat_
-            for block in joint_blocks:
-                block.forward = joint_blocks_forward.pop(0)
+            x = self.forward_core_with_concat(x, c, context, control, transformer_options)
+        finally:
+            # Restore forward_core_with_concat and the patched joint-block
+            # forwards even if the forward raises (OOM / user interrupt), so the
+            # model is not left patched for subsequent generations.
+            if apply_nag:
+                self.forward_core_with_concat = forward_core_with_concat_
+                for block in joint_blocks:
+                    block.forward = joint_blocks_forward.pop(0)
 
         x = self.unpatchify(x, hw=hw)  # (N, out_channels, H, W)
         return x[:, :, :hw[-2], :hw[-1]]

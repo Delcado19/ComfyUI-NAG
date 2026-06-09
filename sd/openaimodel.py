@@ -34,16 +34,21 @@ class NAGUNetModel(UNetModel):
                     cross_attns_forward.append((module, module.forward))
                     module.forward = MethodType(NAGCrossAttention.forward, module)
 
-        output = comfy.patcher_extension.WrapperExecutor.new_class_executor(
-            self._forward,
-            self,
-            comfy.patcher_extension.get_all_wrappers(comfy.patcher_extension.WrappersMP.DIFFUSION_MODEL,
-                                                     transformer_options)
-        ).execute(x, timesteps, context, y, control, transformer_options, **kwargs)
-
-        if apply_nag:
-            for mod, forward_fn in cross_attns_forward:
-                mod.forward = forward_fn
+        try:
+            output = comfy.patcher_extension.WrapperExecutor.new_class_executor(
+                self._forward,
+                self,
+                comfy.patcher_extension.get_all_wrappers(comfy.patcher_extension.WrappersMP.DIFFUSION_MODEL,
+                                                         transformer_options)
+            ).execute(x, timesteps, context, y, control, transformer_options, **kwargs)
+        finally:
+            # Restore the patched attn2 forwards even if the diffusion forward
+            # raises (OOM / user interrupt). Without this the cross-attention
+            # modules stay bound to NAGCrossAttention.forward and corrupt every
+            # subsequent (even non-NAG) generation until ComfyUI is restarted.
+            if apply_nag:
+                for mod, forward_fn in cross_attns_forward:
+                    mod.forward = forward_fn
 
         return output
 

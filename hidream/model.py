@@ -353,14 +353,18 @@ class NAGHiDreamImageTransformer2DModel(HiDreamImageTransformer2DModel):
 
             self.forward_nag = MethodType(NAGHiDreamImageTransformer2DModel.forward_nag, self)
 
-        output = self.forward_nag(x, t, y, context, encoder_hidden_states_llama3, image_cond, control, transformer_options)
-
-        if apply_nag:
-            self.forward_nag = forward_nag_
-            for block, forward_fn in blocks_forward:
-                block.forward = forward_fn
-            for module, processor in attn_processors:
-                module.processor = processor
+        try:
+            output = self.forward_nag(x, t, y, context, encoder_hidden_states_llama3, image_cond, control, transformer_options)
+        finally:
+            # Restore forward_nag, the patched block forwards and attention
+            # processors even if the forward raises (OOM / user interrupt), so a
+            # failed run does not leave the model patched for the next one.
+            if apply_nag:
+                self.forward_nag = forward_nag_
+                for block, forward_fn in blocks_forward:
+                    block.forward = forward_fn
+                for module, processor in attn_processors:
+                    module.processor = processor
 
         return output
 

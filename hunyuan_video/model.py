@@ -716,16 +716,20 @@ class NAGHunyuanVideo(HunyuanVideo):
 
             txt_ids = torch.zeros((bs, origin_context_len, 3), device=x.device, dtype=x.dtype)
             txt_ids_negative = torch.zeros((nag_bsz, nag_negative_context_len, 3), device=x.device, dtype=x.dtype)
-            out = self.forward_orig(
-                x, img_ids, context, txt_ids, txt_ids_negative, attention_mask, timestep, y, guidance, guiding_frame_index, ref_latent,
-                control=control, transformer_options=transformer_options,
-            )
-
-            self.forward_orig = forward_orig_
-            for block in double_blocks:
-                block.forward = double_blocks_forward.pop(0)
-            for block in single_blocks:
-                block.forward = single_blocks_forward.pop(0)
+            try:
+                out = self.forward_orig(
+                    x, img_ids, context, txt_ids, txt_ids_negative, attention_mask, timestep, y, guidance, guiding_frame_index, ref_latent,
+                    control=control, transformer_options=transformer_options,
+                )
+            finally:
+                # Restore forward_orig and the patched block forwards even if the
+                # forward raises (OOM / user interrupt), so the model is not left
+                # patched for subsequent generations.
+                self.forward_orig = forward_orig_
+                for block in double_blocks:
+                    block.forward = double_blocks_forward.pop(0)
+                for block in single_blocks:
+                    block.forward = single_blocks_forward.pop(0)
 
         else:
             txt_ids = torch.zeros((bs, context.shape[1], 3), device=x.device, dtype=x.dtype)
